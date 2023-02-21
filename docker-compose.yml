@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  influxdb:
+    container_name: influxdb
+    image: influxdb:2.6.1-alpine
+    volumes:
+      - ./influxdb-data:/var/lib/influxdb2
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=$INFLUXDB_MODE
+      - DOCKER_INFLUXDB_INIT_USERNAME=$INFLUXDB_USERNAME
+      - DOCKER_INFLUXDB_INIT_PASSWORD=$INFLUXDB_PASSWORD
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=$INFLUXDB_API_TOKEN
+      - DOCKER_INFLUXDB_INIT_ORG=$INFLUXDB_ORG
+      - DOCKER_INFLUXDB_INIT_BUCKET=$INFLUXDB_BUCKET
+      - DOCKER_INFLUXDB_INIT_RETENTION=$INFLUXDB_RETENTION
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana-oss:9.3.6
+    volumes:
+      - ./grafana/etc:/etc/grafana:ro
+      - ./grafana-data:/var/lib/grafana
+    links:
+      - influxdb:influxdb
+    ports:
+      - "3000:3000"
+    depends_on:
+      - influxdb
+
+  script-runner:
+    container_name: runner
+    build: ./script-runner
+    command: tail -f /dev/null
+    environment:
+      - DOCKER_SCRIPTRUNNER_INFLUXDB_ORG=$INFLUXDB_ORG
+      - DOCKER_SCRIPTRUNNER_INFLUXDB_BUCKET=$INFLUXDB_BUCKET
+      - DOCKER_SCRIPTRUNNER_INFLUXDB_TOKEN=$INFLUXDB_API_TOKEN
+      - DOCKER_SCRIPTRUNNER_INFLUXDB_RETENTION_IN_SECONDS=2592000
+    privileged: true
