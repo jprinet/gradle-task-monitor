@@ -35,3 +35,9 @@ A third container (_runner_) is additionally spawned to ease the data population
 ```bash
 > docker exec runner /home/runner/delete-data.sh
 ```
+
+# Rendering
+
+open the Grafana dashboard on http://localhost:3000/
+
+![img](img/grafana-dashboard.png)
