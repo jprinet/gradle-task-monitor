@@ -1,15 +1,16 @@
 #!/bin/sh
 
 function deleteInfluxdbBucket() {
-  bucketId=$(curl --silent --header "Authorization: Token ${DB_TOKEN}" --header "Accept: application/json" "${DB_URL}/api/v2/buckets?name=${DB_BUCKET}" |
-              jq -r ".buckets[0].id"
-            )
+  bucketId=$(
+    curl --silent --header "Authorization: Token ${DB_TOKEN}" --header "Accept: application/json" "${DB_URL}/api/v2/buckets?name=${DB_BUCKET}" |
+      jq -r ".buckets[0].id"
+  )
 
   curl --request DELETE \
-  	--silent \
-  	--header "Authorization: Token ${DB_TOKEN}" \
+    --silent \
+    --header "Authorization: Token ${DB_TOKEN}" \
     --header "Content-type: application/json" \
-  	"${DB_URL}/api/v2/buckets/${bucketId}"
+    "${DB_URL}/api/v2/buckets/${bucketId}"
 }
 
 ############
