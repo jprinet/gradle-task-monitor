@@ -28,7 +28,7 @@ A third container (_runner_) is additionally spawned to ease the data population
 > GRADLE_ENTERPRISE_TOKEN=my-secret-token
 # Unix timestamp in ms
 > FROM_INSTANT=1676473287633
-> docker exec runner /home/runner/add-data.sh ${GRADLE_ENTERPRISE_URL} ${GRADLE_ENTERPRISE_TOKEN} ${FROM_INSTANT} myProject "Git branch=feature/more_awesome"
+> docker exec runner /home/runner/add-data.sh ${GRADLE_ENTERPRISE_URL} ${GRADLE_ENTERPRISE_TOKEN} ${FROM_INSTANT} myProject "Git branch=feature/awesome"
 ```
 
 - Delete all data from the system (delete InfluxDB bucket):
