@@ -26,18 +26,26 @@ function createInfluxdbBucket() {
 }
 
 function getBuilds() {
-  local buildType=$1
-  buildScanIds=$(
-    curl --silent --header "authorization: Bearer ${geToken}" "${geUrl}/api/builds?fromInstant=${fromInstant}&reverse=false&maxBuilds=1000" |
-      jq -r ".[] | select( .buildToolType == \"${buildType}\") | .id"
-  )
+  local encodedQuery=$(echo $query | jq -sRr @uri)
+  buildScans=$(curl --silent "${geUrl}/api/builds?fromInstant=0&maxBuilds=1000&reverse=false&query=${encodedQuery}" --header "authorization: Bearer ${geToken}" | jq -r ".[] | [.id,.availableAt,.buildToolType] | @csv")
 }
 
 function processBuilds() {
-  local buildType=$1
-  for buildScanId in ${buildScanIds}; do
-    echo "Processing ${buildType} build ${buildScanId}"
-    processBuild ${buildType} ${buildScanId}
+  buildCount=1
+  for buildScan in ${buildScans}; do
+    # Remove "
+    buildScan=$(echo "${buildScan}" | sed -e 's/"//g')
+
+    # Parse fields
+    buildScanId=$(echo "${buildScan}" | cut -d, -f 1)
+    buildScanDate=$(echo "${buildScan}" | cut -d, -f 2)
+    buildTool=$(echo "${buildScan}" | cut -d, -f 3)
+
+    # process build
+    echo "Build ${buildCount}: Processing ${buildScanId} (${buildTool}) published at $(date -d @$(echo ${buildScanDate} | head -c 10))"
+    processBuild ${buildTool} ${buildScanId}
+
+    buildCount=$((buildCount+1))
   done
 }
 
@@ -62,27 +70,10 @@ function processBuild() {
     return
   fi
 
-  local buildScanData=$(
+  local buildStartTime=$(
     curl --silent --header "authorization: Bearer ${geToken}" "${geUrl}/api/builds/${buildScanId}/${buildType}-attributes" |
-      jq --arg projectKey "${projectKey}" "{buildStartTime, values, projectName: $projectKey}"
+      jq .buildStartTime
   )
-  local buildStartTime=$(echo ${buildScanData} | jq .buildStartTime)
-  local customValues=$(echo ${buildScanData} | jq -c .values)
-  local currentProject=$(echo ${buildScanData} | jq -r .projectName)
-
-  isMatching=false
-  isMatchingProject "${currentProject}"
-  if [ "$isMatching" == "false" ]; then
-    echo "Skipping build (not matching project)"
-    return
-  fi
-
-  isMatching=false
-  isMatchingCustomValue "${customValues}"
-  if [ "$isMatching" == "false" ]; then
-    echo "Skipping build (not matching custom value)"
-    return
-  fi
 
   local tasks=$(
     curl --silent --header "authorization: Bearer ${geToken}" "${geUrl}/api/builds/${buildScanId}/${buildType}-build-cache-performance" |
@@ -128,33 +119,6 @@ function isBuildProcessed() {
   fi
 }
 
-function isMatchingProject() {
-  local currentProject=$1
-
-  if [ ! -z "${projectFilter}" ]; then
-    if [ "${projectFilter}" == "${currentProject}" ]; then
-      isMatching=true
-    fi
-  else
-    isMatching=true
-  fi
-}
-
-function isMatchingCustomValue() {
-  local customValues=$1
-
-  if [ ! -z "${customValueFilter}" ]; then
-    customKey=$(echo ${customValueFilter} | cut -d "=" -f 1)
-    customValue=$(echo ${customValueFilter} | cut -d "=" -f 2)
-    isMatching=$(
-      echo ${customValues} |
-        jq --arg customKey "${customKey}" --arg customValue "${customValue}" 'contains([{name:$customKey,value:$customValue}])'
-    )
-  else
-    isMatching=true
-  fi
-}
-
 ############
 ### MAIN ###
 ############
@@ -165,57 +129,19 @@ DB_TOKEN=$DOCKER_SCRIPTRUNNER_INFLUXDB_TOKEN
 DB_RETENTION=$DOCKER_SCRIPTRUNNER_INFLUXDB_RETENTION_IN_SECONDS
 
 if [ $# -lt 3 ]; then
-  echo 'USAGE: "collect-data.sh <GRADLE_ENTERPRISE_URL> <GRADLE_ENTERPRISE_TOKEN> <FROM_INSTANT_UNIX_TIMESTAMP_IN_MS> [--project <PROJECT>] [--custom-value "<KEY=VALUE>"]'
+  echo 'USAGE: "collect-data.sh <GRADLE_ENTERPRISE_URL> <GRADLE_ENTERPRISE_TOKEN> <query>'
   exit 1
 fi
 
 geUrl=$1
 geToken=$2
-fromInstant=$3
-
-while :; do
-  case $4 in
-  -p | --project)
-    if [ "$5" ]; then
-      projectFilter=$5
-      shift
-    else
-      echo 'ERROR: "--project" requires a non-empty option argument.'
-      exit 1
-    fi
-    ;;
-  -c | --custom-value)
-    customValueFilter=$4
-    if [ "$5" ]; then
-      customValueFilter=$5
-      shift
-    else
-      echo 'ERROR: "--custom-value" requires a non-empty option argument.'
-      exit 1
-    fi
-    ;;
-  *) break ;;
-  esac
-  shift
-done
-
-echo "Looking for builds since $(date -d @${fromInstant})"
-if [ ! -z "${projectFilter}" ]; then
-  echo "Filtering builds from project (${projectFilter})"
-fi
-if [ ! -z "${customValueFilter}" ]; then
-  echo "Filtering builds matching custom value (${customValueFilter})"
-fi
+query=$3
 
 # Create bucket
 createInfluxdbBucket
 
-# Process Gradle builds
-buildScanIds=""
-getBuilds gradle
-processBuilds gradle
+# Collect builds
+getBuilds
 
-# Process Maven builds
-buildScanIds=""
-getBuilds maven
-processBuilds maven
+# Process builds
+processBuilds
