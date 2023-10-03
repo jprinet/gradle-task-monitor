@@ -25,7 +25,7 @@ A third container (_runner_) is additionally spawned to ease the data population
 > GRADLE_ENTERPRISE_URL=https://gradle-enterprise.com
 > GRADLE_ENTERPRISE_TOKEN=my-secret-token
 # Unix timestamp in ms
-> QUERY=""buildStartTime > -1d and project:common-custom-user-data-gradle-plugin"
+> QUERY="buildStartTime > -1d and project:common-custom-user-data-gradle-plugin"
 > docker exec runner /home/runner/collect-data.sh ${GRADLE_ENTERPRISE_URL} ${GRADLE_ENTERPRISE_TOKEN} ${QUERY}
 ```
 
